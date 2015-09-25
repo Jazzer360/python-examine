@@ -25,97 +25,98 @@ class Structure(object):
     def __init__(self, value, key=None, parent=None):
         self.key = key
         self.parent = parent
-        self.valtype = type(value)
+        self.type_ = type(value)
         self.key_guaranteed = True
         self.val_guaranteed = True
         self.children = []
-        self.list_depth = 0
 
-        if isinstance(value, list):
-            # Make a structure out of each list item
-            list_items = [Structure(item) for item in value]
+        if self.is_list:
+            # Make a structure out of each item in the list
+            list_items = [Structure(item, parent=self) for item in value]
             if list_items:
-                # Merge each structure in the list
-                merged_hierarchy = list_items[0]
+                # Add all structures together to get the common structure
+                merged_structure = list_items[0]
                 for item in list_items[1:]:
-                    merged_hierarchy += item
-                # Make this structure the same as the merged structure
-                self.list_depth = merged_hierarchy.list_depth + 1
-                self.valtype = merged_hierarchy.valtype
-                self.val_guaranteed = merged_hierarchy.val_guaranteed
-                self.children = merged_hierarchy.children
-                for child in self.children:
-                    child.parent = self
-            # The list didn't have anything, but is still a list
+                    merged_structure += item
+                # Set the only list child to the common structure
+                self.children.append(merged_structure)
             else:
-                self.list_depth = 1
-                self.valtype = _EMPTY_TYPE
-        elif isinstance(value, dict):
-            self.children = []
+                self.children.append(Structure(_EMPTY_TYPE(), parent=self))
+        elif self.is_tuple:
+            # Make a structure out of each item in the tuple
+            tuple_items = [Structure(item, parent=self) for item in value]
+            if tuple_items:
+                self.children = tuple_items
+            else:
+                self.children.append(Structure(_EMPTY_TYPE(), parent=self))
+        elif self.is_dict:
             for key, val in value.items():
                 self.children.append(Structure(val, key, self))
-
-        if self.children:
             self.children.sort(key=lambda child: child.key)
 
     def __add__(self, other):
-        # It only makes sense to add attributes with same parent/key
-        if self.parent != other.parent:
-            raise ValueError('You may only sum attributes that share a parent')
-        elif self.key != other.key:
-            raise ValueError('You may only sum attributes with equal keys')
-        # When dealing with a list of some type and an empty list, allow
-        # them to merge.
-        if ((self.list_depth or other.list_depth) and
-            self.list_depth == other.list_depth):
-                if self.valtype and other.valtype is _EMPTY_TYPE:
-                    return self
-                elif other.valtype and self.valtype is _EMPTY_TYPE:
-                    return other
-        # First check if one of the types is None, and defer to other
-        if self.valtype == _NONE_TYPE and other.valtype == _NONE_TYPE:
-            self.val_guaranteed &= other.val_guaranteed
+        assert self.key == other.key
+
+        new = Structure(None, key=self.key)
+        new.key_guaranteed = self.key_guaranteed & other.key_guaranteed
+        new.val_guaranteed = self.val_guaranteed & other.val_guaranteed
+        # if one has a non-guaranteed value, the other can't either
+        # self.key_guaranteed &= other.key_guaranteed
+        # self.val_guaranteed &= other.val_guaranteed
+
+        if self.is_list and other.is_list:
+            new.type_ = list
+            listchild = self.children[0] + other.children[0]
+            listchild.parent = new
+            new.children.append(listchild)
+            s_child = self.children[0]
+            o_child = other.children[0]
+            return new
+            # if s_child.type_ is _EMPTY_TYPE:
+            #     return other
+            # elif o_child.type_ is _EMPTY_TYPE:
+            #     return self
+            # elif s_child.type_ is _NONE_TYPE:
+            #     if o_child.type_ is not _NONE_TYPE:
+            #         o_child.val_guaranteed = False
+            #     o_child.parent = self
+            #     self.children[0] = o_child
+            #     return self
+            # elif o_child.type_ is _NONE_TYPE:
+            #     if s_child.type_ is not _NONE_TYPE:
+            #         s_child.val_guaranteed = False
+            #     return self
+            # elif s_child.type_ is o_child.type_:
+            #     self.children[0] += other.children[0]
+            #     return self
+            # else:
+            #     self.children[0].type_ = _MIXED_TYPE
+            #     self.children[0].childern = []
+            #     return self
+        elif self.is_tuple and other.is_tuple:
+            # Run through each child of the two tuples, in order, and where
+            # there is a difference, indicate <mixed>
+
+            # If tuple lengths are not the same, indicate the extra length
+            # children are not guaranteed
             return self
-        elif (self.valtype == _NONE_TYPE and
-            self.list_depth == other.list_depth):
-                self.valtype = other.valtype
+        elif self.is_dict and other.is_dict:
+            return self
+        elif self.type_ is other.type_:
+            return self
+        else:
+            if self.type_ is _NONE_TYPE:
+                self.type_ = other.type_
                 self.val_guaranteed = False
-        elif (other.valtype == _NONE_TYPE and
-            self.list_depth == other.list_depth):
-                other.valtype = self.valtype
-                self.val_guaranteed = False
-        # If types don't match, indicate mixed and clear children
-        if (self.valtype != other.valtype or
-            self.list_depth != other.list_depth):
-                self.valtype = _MIXED_TYPE
-                self.children = []
-                self.list_depth = 0
-        # If both have children merge them and indicate guaranteed
-        elif self.children and other.children:
-            for c1 in self.children:
-                key_guaranteed = False
-                for c2 in other.children:
-                    if c1.key == c2.key:
-                        c2.parent = c1.parent
-                        c1 += c2
-                        key_guaranteed = c1.key_guaranteed
-                c1.key_guaranteed = key_guaranteed
-            for child in other.children:
-                if child not in self:
-                    self.children.append(child)
+                self.children = other.children
+                for child in self.children:
                     child.parent = self
-                    child.key_guaranteed = False
-        # If only self has children indicate they're not guaranteed
-        elif self.children and not other.children:
-            for child in self.children:
-                child.key_guaranteed = False
-        # If only other has children indicate they're not guaranteed
-        elif other.children and not self.children:
-            self.children = other.children
-            for child in self.children:
-                child.key_guaranteed = False
-                child.parent = self
-        return self
+            elif other.type_ is _NONE_TYPE:
+                self.val_guaranteed = False
+            else:
+                self.type_ = _MIXED_TYPE
+                self.children = []
+            return self
 
     def __contains__(self, item):
         for child in self.children:
@@ -125,21 +126,13 @@ class Structure(object):
 
     def __str__(self):
         if self.parent:
-            string = '{}{}{} - {}{}{}{}\n'.format(
+            string = '{}{} - {}\n'.format(
                 '  ' * (self.generation - 1),
-                '' if self.key_guaranteed else '*',
                 self.key,
-                self.list_depth * '[',
-                '' if self.val_guaranteed else '*',
-                self.valtype.__name__,
-                self.list_depth * ']')
+                self.type_string)
         else:
-            string = '=== {}{}{}{} ===\n'.format(
-                self.list_depth * '[',
-                '' if self.val_guaranteed else '*',
-                self.valtype.__name__,
-                self.list_depth * ']')
-        if self.children:
+            string = '=== {} ===\n'.format(self.type_string)
+        if self.children and self.type_ is dict:
             for child in self.children:
                 string += str(child) + '\n'
         return string[:-1]
@@ -148,5 +141,36 @@ class Structure(object):
     def generation(self):
         if not self.parent:
             return 0
-        return 1 + self.parent.generation
+        elif self.is_list or self.is_tuple:
+            return self.parent.generation
+        else:
+            return 1 + self.parent.generation
 
+    @property
+    def type_string(self):
+        if self.is_tuple:
+            subtypes = [item.type_string for item in self.children]
+            return '{}({})'.format(
+                '' if self.val_guaranteed else '*',
+                ', '.join(subtypes))
+        elif self.is_list:
+            return '{}[{}]'.format(
+                '' if self.val_guaranteed else '*',
+                self.children[0].type_string)
+        else:
+            return '{}{}'.format(
+                '' if self.val_guaranteed else '*',
+                self.type_.__name__)
+    
+    @property
+    def is_list(self):
+        return issubclass(self.type_, list)
+
+    @property
+    def is_tuple(self):
+        return issubclass(self.type_, tuple)
+
+    @property
+    def is_dict(self):
+        return issubclass(self.type_, dict)
+    
