@@ -146,12 +146,12 @@ class Structure(object):
         """A structured representation of the underlying structure"""
         if self.parent:
             string = '{}{}{} - {}\n'.format(
-                '  ' * (self.generation - 1),
+                '  ' * (self.generation),
                 '' if self.key_guaranteed else '*',
                 self.key,
                 self.type_string)
         else:
-            string = '=== {} ===\n'.format(self.type_string)
+            string = '{}\n'.format(self.type_string)
         if self.children:
             if self.is_list:
                 sub = self.children[0]
