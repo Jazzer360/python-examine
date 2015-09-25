@@ -1,5 +1,5 @@
 import unittest
-from examine import Structure
+from ..examine import Structure
 
 class TestStructure(unittest.TestCase):
 
@@ -168,8 +168,22 @@ class TestStructure(unittest.TestCase):
         self.assertChildren(struc)
 
     def test_deep_list_nest(self):
-        alist = [[[1],[]],[[],[1]], None]
+        alist = [[[1],[]],[[],[1]], None, []]
         expected = '=== [*[[int]]] ==='
+        struc = Structure(alist)
+        self.assertEqual(str(struc), expected)
+        self.assertChildren(struc)
+
+    def test_list_of_tuples(self):
+        alist = [('str', None, []), ('str', 1, 2, 'over')]
+        expected = '=== [(str, *int, <mixed-type>, *str)] ==='
+        struc = Structure(alist)
+        self.assertEqual(str(struc), expected)
+        self.assertChildren(struc)
+
+    def test_empty_tuple_merging(self):
+        alist = [tuple(), ('str', 1)]
+        expected = '=== [(*str, *int)] ==='
         struc = Structure(alist)
         self.assertEqual(str(struc), expected)
         self.assertChildren(struc)

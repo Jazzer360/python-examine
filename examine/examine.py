@@ -1,3 +1,9 @@
+from collections import defaultdict
+try:
+    from itertools import zip_longest
+except ImportError:
+    from itertools import izip_longest as zip_longest
+
 _NONE_TYPE = type(None)
 _EMPTY_TYPE = type('', (object,), {})
 _MIXED_TYPE = type('<mixed-type>', (object,), {})
@@ -39,6 +45,7 @@ class Structure(object):
                 for item in list_items[1:]:
                     merged_structure += item
                 # Set the only list child to the common structure
+                merged_structure.parent = self
                 self.children.append(merged_structure)
             else:
                 self.children.append(Structure(_EMPTY_TYPE(), parent=self))
@@ -47,8 +54,6 @@ class Structure(object):
             tuple_items = [Structure(item, parent=self) for item in value]
             if tuple_items:
                 self.children = tuple_items
-            else:
-                self.children.append(Structure(_EMPTY_TYPE(), parent=self))
         elif self.is_dict:
             for key, val in value.items():
                 self.children.append(Structure(val, key, self))
@@ -57,66 +62,76 @@ class Structure(object):
     def __add__(self, other):
         assert self.key == other.key
 
-        new = Structure(None, key=self.key)
-        new.key_guaranteed = self.key_guaranteed & other.key_guaranteed
-        new.val_guaranteed = self.val_guaranteed & other.val_guaranteed
-        # if one has a non-guaranteed value, the other can't either
-        # self.key_guaranteed &= other.key_guaranteed
-        # self.val_guaranteed &= other.val_guaranteed
+        key_guaranteed = self.key_guaranteed and other.key_guaranteed
+        val_guaranteed = self.val_guaranteed and other.val_guaranteed
 
-        if self.is_list and other.is_list:
-            new.type_ = list
-            listchild = self.children[0] + other.children[0]
-            listchild.parent = new
-            new.children.append(listchild)
-            s_child = self.children[0]
-            o_child = other.children[0]
-            return new
-            # if s_child.type_ is _EMPTY_TYPE:
-            #     return other
-            # elif o_child.type_ is _EMPTY_TYPE:
-            #     return self
-            # elif s_child.type_ is _NONE_TYPE:
-            #     if o_child.type_ is not _NONE_TYPE:
-            #         o_child.val_guaranteed = False
-            #     o_child.parent = self
-            #     self.children[0] = o_child
-            #     return self
-            # elif o_child.type_ is _NONE_TYPE:
-            #     if s_child.type_ is not _NONE_TYPE:
-            #         s_child.val_guaranteed = False
-            #     return self
-            # elif s_child.type_ is o_child.type_:
-            #     self.children[0] += other.children[0]
-            #     return self
-            # else:
-            #     self.children[0].type_ = _MIXED_TYPE
-            #     self.children[0].childern = []
-            #     return self
-        elif self.is_tuple and other.is_tuple:
-            # Run through each child of the two tuples, in order, and where
-            # there is a difference, indicate <mixed>
+        if self.type_ is other.type_:
+            new = Structure(None, key=self.key)
+            new.type_ = self.type_
+            new.key_guaranteed = key_guaranteed
+            new.val_guaranteed = val_guaranteed
 
-            # If tuple lengths are not the same, indicate the extra length
-            # children are not guaranteed
-            return self
-        elif self.is_dict and other.is_dict:
-            return self
-        elif self.type_ is other.type_:
-            return self
-        else:
-            if self.type_ is _NONE_TYPE:
-                self.type_ = other.type_
-                self.val_guaranteed = False
-                self.children = other.children
+            if self.is_list and other.is_list:
+                listchild = self.children[0] + other.children[0]
+                listchild.parent = new
+                new.children.append(listchild)
+                return new
+            elif self.is_tuple and other.is_tuple:
+                zipped = zip_longest(self.children, other.children)
+                for schild, ochild in zipped:
+                    if schild is None:
+                        newchild = ochild.copy(new)
+                        newchild.val_guaranteed = False
+                        new.children.append(newchild)
+                    elif ochild is None:
+                        newchild = schild.copy(new)
+                        newchild.val_guaranteed = False
+                        new.children.append(newchild)
+                    else:
+                        newchild = schild + ochild
+                        newchild.parent = new
+                        new.children.append(newchild)
+                return new
+            elif self.is_dict and other.is_dict:
+                keysdict = defaultdict(lambda: [None, None])
                 for child in self.children:
-                    child.parent = self
-            elif other.type_ is _NONE_TYPE:
-                self.val_guaranteed = False
+                    keysdict[child.key][0] = child
+                for child in other.children:
+                    keysdict[child.key][1] = child
+                for c1, c2 in keysdict.values():
+                    if c1 is None:
+                        newchild = c2.copy(new)
+                        newchild.key_guaranteed = False
+                    elif c2 is None:
+                        newchild = c1.copy(new)
+                        newchild.key_guaranteed = False
+                    else:
+                        newchild = c1 + c2
+                        newchild.parent = new
+                    new.children.append(newchild)
+                new.children.sort(key=lambda child: child.key)
+                return new
             else:
-                self.type_ = _MIXED_TYPE
-                self.children = []
-            return self
+                return new
+        else:
+            if self.type_ is _EMPTY_TYPE:
+                new = other.copy()
+            elif other.type_ is _EMPTY_TYPE:
+                new = self.copy()
+            elif self.type_ is _NONE_TYPE:
+                new = other.copy()
+                new.key_guaranteed = key_guaranteed
+                new.val_guaranteed = False
+            elif other.type_ is _NONE_TYPE:
+                new = self.copy()
+                new.key_guaranteed = key_guaranteed
+                new.val_guaranteed = False
+            else:
+                new = Structure(None, key=self.key)
+                new.key_guaranteed = key_guaranteed
+                new.val_guaranteed = val_guaranteed
+                new.type_ = _MIXED_TYPE
+            return new
 
     def __contains__(self, item):
         for child in self.children:
@@ -126,25 +141,44 @@ class Structure(object):
 
     def __str__(self):
         if self.parent:
-            string = '{}{} - {}\n'.format(
+            string = '{}{}{} - {}\n'.format(
                 '  ' * (self.generation - 1),
+                '' if self.key_guaranteed else '*',
                 self.key,
                 self.type_string)
         else:
             string = '=== {} ===\n'.format(self.type_string)
-        if self.children and self.type_ is dict:
-            for child in self.children:
-                string += str(child) + '\n'
+        if self.children:
+            if self.is_list:
+                sub = self.children[0]
+                while sub.is_list:
+                    sub = sub.children[0]
+                if sub.is_dict:
+                    for child in sub.children:
+                        string += str(child) + '\n'
+            elif self.is_dict:
+                for child in self.children:
+                    string += str(child) + '\n'
         return string[:-1]
+
+    def copy(self, parent=None):
+        new = Structure(None, parent=parent)
+        new.key = self.key
+        new.type_ = self.type_
+        new.val_guaranteed = self.val_guaranteed
+        new.key_guaranteed = self.key_guaranteed
+        for child in self.children:
+            new.children.append(child.copy(new))
+        return new
 
     @property
     def generation(self):
         if not self.parent:
             return 0
-        elif self.is_list or self.is_tuple:
-            return self.parent.generation
-        else:
+        elif self.parent.is_dict:
             return 1 + self.parent.generation
+        else:
+            return self.parent.generation
 
     @property
     def type_string(self):
