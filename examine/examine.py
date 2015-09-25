@@ -19,16 +19,21 @@ class AttrDict(dict):
 class Structure(object):
     """An object that reflects the structure of any python data structure.
 
-    Any object may be passed to the constructor and a complete traverse
-    of the structure occurs, making all the appropriate links so that
-    a simple hierarchy may be retrieved. The str function will turn these
-    objects into a simple hierarchy with notations for lists and whether or
-    not an attribute will be guaranteed for each particular branch. Also
-    supported is adding different Structure objects, which will show only
+    Any object may be passed to the constructor and a complete traverse of the
+    structure occurs, making all the appropriate links so that the hierarchy
+    may be examined. The str function will turn these objects into a simple
+    representation of the structure with notations for lists and whether or
+    not an attribute will be guaranteed for each particular branch.
+    Also supported is adding different Structure objects, which will show only
     the structure common to both. Wherever the structure differs, it will
     be noted as a '<mixed-type>'
     """
     def __init__(self, value, key=None, parent=None):
+        """Initialize a structure
+
+        Takes the type of the value, and recursively creates sub-structures
+        as children if the type is a list, tuple, or dict.
+        """
         self.key = key
         self.parent = parent
         self.type_ = type(value)
@@ -60,7 +65,11 @@ class Structure(object):
             self.children.sort(key=lambda child: child.key)
 
     def __add__(self, other):
-        assert self.key == other.key
+        """Add structures to get a new structure that is common to both.
+
+        The returned structure is a newly created structure that reflects the
+        similarities and differences between the two structures added.
+        """
 
         key_guaranteed = self.key_guaranteed and other.key_guaranteed
         val_guaranteed = self.val_guaranteed and other.val_guaranteed
@@ -133,13 +142,8 @@ class Structure(object):
                 new.type_ = _MIXED_TYPE
             return new
 
-    def __contains__(self, item):
-        for child in self.children:
-            if child.key == item.key:
-                return True
-        return False
-
     def __str__(self):
+        """A structured representation of the underlying structure"""
         if self.parent:
             string = '{}{}{} - {}\n'.format(
                 '  ' * (self.generation - 1),
@@ -162,6 +166,7 @@ class Structure(object):
         return string[:-1]
 
     def copy(self, parent=None):
+        """Copies an existing structure and all of it's children"""
         new = Structure(None, parent=parent)
         new.key = self.key
         new.type_ = self.type_
@@ -173,6 +178,7 @@ class Structure(object):
 
     @property
     def generation(self):
+        """Returns the number of ancestors that are dictionaries"""
         if not self.parent:
             return 0
         elif self.parent.is_dict:
@@ -182,6 +188,7 @@ class Structure(object):
 
     @property
     def type_string(self):
+        """Returns a string representing the type of the structure"""
         if self.is_tuple:
             subtypes = [item.type_string for item in self.children]
             return '{}({})'.format(
