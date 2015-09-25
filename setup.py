@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='examine',
-    version='1.0.0',
+    version='1.0.1',
     description='A simple library for examining complex data structures.',
     long_description="""
     Source and documentation: https://github.com/Jazzer360/python-examine
