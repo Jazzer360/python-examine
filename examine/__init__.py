@@ -1,1 +1,1 @@
-from examine import *
+from .examine import Structure, AttrDict
