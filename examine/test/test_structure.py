@@ -1,6 +1,7 @@
 import unittest
 from ..examine import Structure
 
+
 class TestStructure(unittest.TestCase):
 
     def assertChildren(self, structure):
@@ -168,7 +169,7 @@ class TestStructure(unittest.TestCase):
         self.assertChildren(struc)
 
     def test_deep_list_nest(self):
-        alist = [[[1],[]],[[],[1]], None, []]
+        alist = [[[1], []], [[], [1]], None, []]
         expected = '[*[[int]]]'
         struc = Structure(alist)
         self.assertEqual(str(struc), expected)

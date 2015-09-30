@@ -202,7 +202,7 @@ class Structure(object):
             return '{}{}'.format(
                 '' if self.val_guaranteed else '*',
                 self.type_.__name__)
-    
+
     @property
     def is_list(self):
         return issubclass(self.type_, list)
@@ -214,4 +214,3 @@ class Structure(object):
     @property
     def is_dict(self):
         return issubclass(self.type_, dict)
-    
