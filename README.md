@@ -1,5 +1,5 @@
 # examine
-####A simple library for examining complex data structures
+#### A simple library for examining complex data structures
 
 The main component of this library is the structure parser that allows you to easily see the resulting structure of python object:
 ```python
@@ -17,10 +17,10 @@ dict
   name - str
 ```
 
-###Installation
+### Installation
 ```pip install examine```
 
-###Usage
+### Usage
 To use this library, you simply pass any object to the `Structure(obj)` constructor. This gives you a Structure object. While not terribly interesting on it's own, it can be passed to the str function (or simply passed to print) to return an easy-to-interpret layout of the object hierarchy.
 ```python
 >>> print(examine.Structure('string'))
@@ -39,8 +39,8 @@ dict
 <examine.examine.Structure object at ...>
 ```
 
-###Display Format
-#####Simple cases
+### Display Format
+##### Simple cases
 The format is pretty simple. The type of the root object used to create the Structure will be the first line (usually a dict or array of dicts):
 ```python
 >>> print(examine.Structure({}))
@@ -53,7 +53,7 @@ dict
   key1 - str
   key2 - float
 ```
-#####Common dict structure
+##### Common dict structure
 When dealing with a list of dicts, any key found in any of the dicts will be listed as keys. If a key is not found in every dict in the list, it is denoted with an asterisk indicating that the key is not always present:
 ```python
 >>> print(examine.Structure([
@@ -69,7 +69,7 @@ When you are inspecting the common structure of multiple dicts in a list, and th
 [dict]
   key - *str
 ```
-#####More on lists
+##### More on lists
 When looking at a list of a type that sometimes has a `None` value, the value type will have an asterisk in front of it, indicating that some of the values in the list may be `None`.
 ```python
 >>> print(examine.Structure([1, 2, None]))
@@ -80,7 +80,7 @@ When dealing with a list containing mixed types, it will be indicated with the t
 >>> print(examine.Structure([1, 'str', {'key': 'val'}]))
 [<mixed-type>]
 ```
-#####Tuples
+##### Tuples
 Tuples are typically used with non-homogeneous values, and as such, this library tries to give you useful information about the contents of tuples. Here is a simple example of a tuple.
 ```python
 >>> print(examine.Structure(('string', 1)))
@@ -100,7 +100,7 @@ dict
 dict
   anotherkey - str
 ```
-#####Putting things together
+##### Putting things together
 Here is an example result of a more complicated structure:
 ```python
 >>> print(examine.Structure({
